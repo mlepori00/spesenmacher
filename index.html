@@ -86,16 +86,15 @@ function SetupScreen({onSave}){
     <div className="setup">
       <div style={{fontSize:48,marginBottom:16}}>💼</div>
       <h1>Spesen AMP</h1>
-      <p>Gib einmalig deinen Anthropic API-Key ein.<br/>Er wird nur lokal auf diesem Gerät gespeichert.</p>
-      <input type="password" placeholder="sk-ant-api03-..." value={k} onChange={e=>setK(e.target.value)}
-        onKeyDown={e=>{if(e.key==='Enter'&&k.startsWith('sk-'))onSave(k)}}
+      <p>Gib einmalig deinen OpenRouter API-Key ein.<br/>Er wird nur lokal auf diesem Gerät gespeichert.</p>
+      <input type="password" placeholder="sk-or-..." value={k} onChange={e=>setK(e.target.value)}
+        onKeyDown={e=>{if(e.key==='Enter'&&k.length>=10)onSave(k)}}
         style={{marginBottom:12,maxWidth:340}}/>
-      <button onClick={()=>onSave(k)} disabled={!k.startsWith('sk-')} className="btnpri" style={{maxWidth:280}}>
+      <button onClick={()=>onSave(k)} disabled={k.length<10} className="btnpri" style={{maxWidth:280}}>
         Speichern & Starten
       </button>
       <p style={{marginTop:20,fontSize:12,color:'#bbb',lineHeight:1.6}}>
-        API-Key erstellen: console.anthropic.com → API Keys<br/>
-        Kosten: ~0.01 CHF pro Eintrag
+        API-Key: openrouter.ai → Keys<br/>Kosten: ~0.01 CHF pro Eintrag
       </p>
     </div>
   );
@@ -107,7 +106,7 @@ function Settings({apiKey,onSave,onClose}){
     <div className="setup">
       <h1 style={{marginBottom:20}}>Einstellungen</h1>
       <p>API-Key aktualisieren</p>
-      <input type="password" placeholder="sk-ant-..." defaultValue={apiKey} ref={ref} style={{marginBottom:12,maxWidth:340}}/>
+      <input type="password" placeholder="sk-or-..." defaultValue={apiKey} ref={ref} style={{marginBottom:12,maxWidth:340}}/>
       <button className="btnpri" style={{maxWidth:280,marginBottom:12}} onClick={()=>onSave(ref.current.value)}>Speichern</button>
       <button onClick={onClose} style={{background:'none',border:'none',color:'#888',fontSize:14,cursor:'pointer'}}>Abbrechen</button>
     </div>
@@ -152,19 +151,24 @@ function App(){
   };
  
   const apiCall=async(body)=>{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{
+    const msgs=[];
+    if(body.system)msgs.push({role:'system',content:body.system});
+    body.messages.forEach(m=>{
+      if(Array.isArray(m.content)){
+        msgs.push({role:m.role,content:m.content.map(c=>{
+          if(c.type==='image')return{type:'image_url',image_url:{url:`data:${c.source.media_type};base64,${c.source.data}`}};
+          return c;
+        })});
+      }else{msgs.push(m);}
+    });
+    const res=await fetch('https://openrouter.ai/api/v1/chat/completions',{
       method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'x-api-key':apiKey,
-        'anthropic-version':'2023-06-01',
-        'anthropic-dangerous-direct-browser-access':'true'
-      },
-      body:JSON.stringify(body)
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`,'HTTP-Referer':'https://mlepori00.github.io/spesenmacher','X-Title':'Spesen AMP'},
+      body:JSON.stringify({model:'anthropic/claude-3.5-sonnet',max_tokens:body.max_tokens||800,messages:msgs})
     });
     const data=await res.json();
-    if(data.error)throw new Error(data.error.message);
-    return data;
+    if(data.error)throw new Error(data.error.message||JSON.stringify(data.error));
+    return data.choices[0].message.content;
   };
  
   const handleSend=async()=>{
@@ -174,14 +178,13 @@ function App(){
     setLoading(true);
     try{
       const data=await apiCall({
-        model:'claude-sonnet-4-20250514',max_tokens:800,
+        model:'anthropic/claude-3.5-sonnet',max_tokens:800,
         system:`Spesenlogger AMP Sport Aussendienst Michele Lepori, Schweiz. Heute: ${todayStr()}.
 Nur JSON, kein Markdown: {"entries":[{"datum":"YYYY-MM-DD","firma":"Kunde","beschreibung":"Produkt","km":0}],"ausgaben":[{"datum":"YYYY-MM-DD","beschreibung":"Was","betrag":0.0}],"tages":0,"feedback":"Bestätigung DE"}
 heute=${todayStr()}, gestern=gestern. tages=ZUSÄTZLICHE Anzahl Tagesspesen.`,
         messages:[{role:'user',content:text}]
       });
-      const raw=data.content?.find(b=>b.type==='text')?.text||'{}';
-      const p=JSON.parse(raw.replace(/```[\w]*|```/g,'').trim());
+      const p=JSON.parse(data.replace(/```[\w]*|```/g,'').trim());
       const newE=[...entries,...(p.entries||[]).map(e=>({...e,id:uid()}))];
       const newA=[...ausgaben,...(p.ausgaben||[]).map(a=>({...a,id:uid()}))];
       const newT=tages+(p.tages||0);
@@ -221,13 +224,12 @@ heute=${todayStr()}, gestern=gestern. tages=ZUSÄTZLICHE Anzahl Tagesspesen.`,
     try{
       const b64=await compress(file);
       const data=await apiCall({
-        model:'claude-sonnet-4-20250514',max_tokens:400,
+        model:'anthropic/claude-3.5-sonnet',max_tokens:400,
         system:`Extrahiere Rechnungsdaten. Nur JSON: {"datum":"YYYY-MM-DD","beschreibung":"Firma + Artikel","betrag":0.0,"feedback":"Kurz DE"}
 Heute=${todayStr()}. betrag in CHF als Zahl.`,
         messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},{type:'text',text:'Rechnungsdaten extrahieren.'}]}]
       });
-      const raw=data.content?.find(b=>b.type==='text')?.text||'{}';
-      const p=JSON.parse(raw.replace(/```[\w]*|```/g,'').trim());
+      const p=JSON.parse(data.replace(/```[\w]*|```/g,'').trim());
       setPending({...p,base64:b64});
     }catch(e){showToast('Scan fehlgeschlagen: '+e.message,'err');}
     setScanLoad(false);
