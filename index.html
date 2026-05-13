@@ -57,12 +57,12 @@ textarea{resize:none}
 </head>
 <body>
 <div id="root"><div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#aaa;font-size:14px">Lädt…</div></div>
-
+ 
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
+ 
 <script type="text/babel">
 const {useState,useEffect,useRef}=React;
 const VERGUTUNG=0.75,TAGES=30;
@@ -79,7 +79,7 @@ const compress=(file,mw=900,q=0.7)=>new Promise(res=>{
   rd.onload=e=>{const img=new Image();img.onload=()=>{const c=document.createElement('canvas');const r=Math.min(1,mw/Math.max(img.width,img.height));c.width=img.width*r;c.height=img.height*r;c.getContext('2d').drawImage(img,0,0,c.width,c.height);res(c.toDataURL('image/jpeg',q).split(',')[1])};img.src=e.target.result};
   rd.readAsDataURL(file);
 });
-
+ 
 function SetupScreen({onSave}){
   const[k,setK]=useState('');
   return(
@@ -100,7 +100,7 @@ function SetupScreen({onSave}){
     </div>
   );
 }
-
+ 
 function Settings({apiKey,onSave,onClose}){
   const ref=useRef(null);
   return(
@@ -113,7 +113,7 @@ function Settings({apiKey,onSave,onClose}){
     </div>
   );
 }
-
+ 
 function App(){
   const[apiKey,setApiKey]=useState(()=>localStorage.getItem('amp_api_key')||'');
   const[month,setMonth]=useState(getMonthStr);
@@ -138,19 +138,19 @@ function App(){
   const toastT=useRef(null);
   const fileRef=useRef(null);
   const taRef=useRef(null);
-
+ 
   useEffect(()=>{
     const d=loadM(month);
     setEntries(d.entries);setAusgaben(d.ausgaben);setTages(d.tages);
   },[month]);
-
+ 
   const save=(e,a,t)=>saveM(month,e,a,t);
-
+ 
   const showToast=(msg,type='ok')=>{
     setToast({msg,type});clearTimeout(toastT.current);
     toastT.current=setTimeout(()=>setToast(null),4000);
   };
-
+ 
   const apiCall=async(body)=>{
     const res=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
@@ -166,7 +166,7 @@ function App(){
     if(data.error)throw new Error(data.error.message);
     return data;
   };
-
+ 
   const handleSend=async()=>{
     if(!input.trim()||loading)return;
     const text=input.trim();setInput('');
@@ -190,7 +190,7 @@ heute=${todayStr()}, gestern=gestern. tages=ZUSÄTZLICHE Anzahl Tagesspesen.`,
     }catch(e){showToast('Fehler: '+e.message,'err');}
     setLoading(false);
   };
-
+ 
   const calcRoute=async()=>{
     if(!rFrom||!rTo)return;
     setRLoad(true);setRKm(null);
@@ -205,7 +205,7 @@ heute=${todayStr()}, gestern=gestern. tages=ZUSÄTZLICHE Anzahl Tagesspesen.`,
     }catch(e){showToast('Route: '+e.message,'err');}
     setRLoad(false);
   };
-
+ 
   const createRouteEntry=()=>{
     if(!rKm)return;
     const km=rRound?rKm*2:rKm;
@@ -214,7 +214,7 @@ heute=${todayStr()}, gestern=gestern. tages=ZUSÄTZLICHE Anzahl Tagesspesen.`,
     showToast(`✓ ${km} km eingetragen`);
     setShowRoute(false);setRFrom('');setRTo('');setRFirma('');setRDesc('');setRKm(null);setRRound(false);
   };
-
+ 
   const handleFile=async(e)=>{
     const file=e.target.files?.[0];if(!file)return;e.target.value='';
     setScanLoad(true);
@@ -232,28 +232,28 @@ Heute=${todayStr()}. betrag in CHF als Zahl.`,
     }catch(e){showToast('Scan fehlgeschlagen: '+e.message,'err');}
     setScanLoad(false);
   };
-
+ 
   const confirmReceipt=()=>{
     if(!pending)return;
     const newA=[...ausgaben,{id:uid(),datum:pending.datum||todayStr(),beschreibung:pending.beschreibung||'Ausgabe',betrag:Number(pending.betrag)||0,receipt:pending.base64}];
     setAusgaben(newA);save(entries,newA,tages);
     showToast(pending.feedback||'✓ Quittung gespeichert');setPending(null);
   };
-
+ 
   const rmEntry=id=>{const n=entries.filter(e=>e.id!==id);setEntries(n);save(n,ausgaben,tages)};
   const rmAusgabe=id=>{const n=ausgaben.filter(a=>a.id!==id);setAusgaben(n);save(entries,n,tages)};
   const adjTages=d=>{const n=Math.max(0,tages+d);setTages(n);save(entries,ausgaben,n)};
   const changeMonth=d=>{const[y,m]=month.split('-').map(Number);const nd=new Date(y,m-1+d,1);setMonth(`${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}`)};
-
+ 
   const saveApiKey=k=>{localStorage.setItem('amp_api_key',k);setApiKey(k);setShowSettings(false)};
-
+ 
   const totalKm=entries.reduce((s,e)=>s+(Number(e.km)||0),0);
   const kmChf=+(totalKm*VERGUTUNG).toFixed(2);
   const ausgChf=+ausgaben.reduce((s,a)=>s+(Number(a.betrag)||0),0).toFixed(2);
   const tChf=tages*TAGES;
   const total=+(kmChf+ausgChf+tChf).toFixed(2);
   const hasRec=ausgaben.some(a=>a.receipt);
-
+ 
   const exportXlsx=()=>{
     const rows=[
       ['SPESENABRECHNUNG'],['AMP Sport GmbH'],['Poststrasse 6, 6302 Zug'],['Name','Michele Lepori'],[],
@@ -270,21 +270,21 @@ Heute=${todayStr()}. betrag in CHF als Zahl.`,
     XLSX.utils.book_append_sheet(wb,ws,'Spesenabrechnung AMP');
     XLSX.writeFile(wb,`Spesenformular_${month}.xlsx`);
   };
-
+ 
   const dlBelege=()=>ausgaben.filter(a=>a.receipt).forEach(a=>{
     const l=document.createElement('a');
     l.href=`data:image/jpeg;base64,${a.receipt}`;
     l.download=`Beleg_${fmtD(a.datum)}_${(a.beschreibung||'').slice(0,20).replace(/[^\w]/g,'_')}.jpg`;
     l.click();
   });
-
+ 
   if(!apiKey)return <SetupScreen onSave={saveApiKey}/>;
   if(showSettings)return <Settings apiKey={apiKey} onSave={saveApiKey} onClose={()=>setShowSettings(false)}/>;
-
+ 
   return(
     <div style={{paddingTop:16}}>
       <input type="file" accept="image/*" capture="environment" ref={fileRef} style={{display:'none'}} onChange={handleFile}/>
-
+ 
       {/* Header */}
       <div className="rsb" style={{marginBottom:12}}>
         <button className="ib" onClick={()=>changeMonth(-1)} aria-label="Vorheriger Monat" style={{fontSize:22}}>‹</button>
@@ -294,7 +294,7 @@ Heute=${todayStr()}. betrag in CHF als Zahl.`,
           <button className="ib" onClick={()=>setShowSettings(true)} title="Einstellungen" style={{fontSize:17}}>⚙</button>
         </div>
       </div>
-
+ 
       {/* Summary */}
       <div className="g2" style={{marginBottom:16}}>
         <div style={{background:'#fff',borderRadius:12,padding:'12px 14px',border:'0.5px solid var(--border2)'}}>
@@ -306,7 +306,7 @@ Heute=${todayStr()}. betrag in CHF als Zahl.`,
           <div className="mono" style={{fontSize:18,fontWeight:500}}>CHF {total.toFixed(2)}</div>
         </div>
       </div>
-
+ 
       {/* Input */}
       <div className="card" style={{marginBottom:16}}>
         <textarea ref={taRef} value={input} rows={2} disabled={loading}
@@ -333,7 +333,7 @@ Heute=${todayStr()}. betrag in CHF als Zahl.`,
           </button>
         </div>
       </div>
-
+ 
       {/* Route panel */}
       {showRoute&&(
         <div className="panel">
@@ -344,14 +344,23 @@ Heute=${todayStr()}. betrag in CHF als Zahl.`,
             <input placeholder="Firma / Kunde" value={rFirma} onChange={e=>setRFirma(e.target.value)}/>
             <input placeholder="Produkt" value={rDesc} onChange={e=>setRDesc(e.target.value)}/>
           </div>
-          <div className="rsb" style={{marginBottom:12}}>
-            <label className="row" style={{gap:6,fontSize:13,cursor:'pointer',color:'var(--t2)'}}>
+          <div style={{marginBottom:12}}>
+            <label className="row" style={{gap:6,fontSize:13,cursor:'pointer',color:'var(--t2)',marginBottom:10}}>
               <input type="checkbox" checked={rRound} onChange={e=>setRRound(e.target.checked)} style={{cursor:'pointer',width:'auto'}}/>
               Hin- und Rückfahrt
             </label>
-            {rKm&&<span className="mono" style={{fontSize:14,fontWeight:500}}>
-              {rRound?rKm*2:rKm} km {rRound&&<span style={{fontSize:12,color:'var(--t2)'}}>(2×{rKm})</span>}
-            </span>}
+            {rKm&&(
+              <div className="rsb">
+                <div className="row" style={{gap:8}}>
+                  <button onClick={()=>setRKm(Math.max(1,rKm-1))} style={{width:36,height:36,fontSize:20,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center'}}>−</button>
+                  <button onClick={()=>setRKm(rKm+1)} style={{width:36,height:36,fontSize:20,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
+                </div>
+                <span className="mono" style={{fontSize:15,fontWeight:600}}>
+                  {rRound?rKm*2:rKm} km
+                  {rRound&&<span style={{fontSize:12,color:'var(--t2)',fontWeight:400}}> (2×{rKm})</span>}
+                </span>
+              </div>
+            )}
           </div>
           <div className="g2">
             <button onClick={calcRoute} disabled={rLoad||!rFrom||!rTo} style={{padding:'9px',fontSize:13,borderRadius:8}}>
@@ -364,7 +373,7 @@ Heute=${todayStr()}. betrag in CHF als Zahl.`,
           </div>
         </div>
       )}
-
+ 
       {/* Pending receipt */}
       {pending&&(
         <div className="panel" style={{borderColor:'#a0c4f8',marginBottom:16}}>
@@ -385,10 +394,10 @@ Heute=${todayStr()}. betrag in CHF als Zahl.`,
           </div>
         </div>
       )}
-
+ 
       {/* Toast */}
       {toast&&<div className={`toast ${toast.type==='err'?'terr':'tok'}`}>{toast.msg}</div>}
-
+ 
       {/* Entries */}
       {entries.length>0&&(
         <div style={{marginBottom:16}}>
@@ -408,7 +417,7 @@ Heute=${todayStr()}. betrag in CHF als Zahl.`,
           ))}
         </div>
       )}
-
+ 
       {/* Ausgaben */}
       {ausgaben.length>0&&(
         <div style={{marginBottom:16}}>
@@ -434,7 +443,7 @@ Heute=${todayStr()}. betrag in CHF als Zahl.`,
           ))}
         </div>
       )}
-
+ 
       {/* Tagesspesen */}
       <div style={{marginBottom:16}}>
         <div className="sl">Tagesspesen</div>
@@ -450,7 +459,7 @@ Heute=${todayStr()}. betrag in CHF als Zahl.`,
           <div className="mono" style={{fontSize:13,minWidth:72,textAlign:'right',flexShrink:0}}>CHF {tChf.toFixed(2)}</div>
         </div>
       </div>
-
+ 
       {/* Total */}
       {(entries.length>0||ausgaben.length>0||tages>0)&&(
         <div className="card" style={{marginBottom:12}}>
@@ -469,23 +478,23 @@ Heute=${todayStr()}. betrag in CHF als Zahl.`,
           </div>
         </div>
       )}
-
+ 
       {/* Export */}
       <div className={hasRec?'g2':''} style={{gap:8}}>
         <button onClick={exportXlsx} className="btnpri">📊 Excel exportieren</button>
         {hasRec&&<button onClick={dlBelege} className="btnpri">🖼 Belege laden</button>}
       </div>
-
+ 
       <div style={{height:16}}/>
     </div>
   );
 }
-
+ 
 // PWA manifest as blob
 const manifest={name:'Spesen AMP',short_name:'Spesen',start_url:'.',display:'standalone',background_color:'#F5F3EF',theme_color:'#1a1a1a'};
 const mb=new Blob([JSON.stringify(manifest)],{type:'application/json'});
 const ml=document.createElement('link');ml.rel='manifest';ml.href=URL.createObjectURL(mb);document.head.appendChild(ml);
-
+ 
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
 </script>
 </body>
