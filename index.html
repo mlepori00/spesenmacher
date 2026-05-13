@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Spesen AMP">
+<meta name="theme-color" content="#F5F3EF">
+<title>Spesen AMP</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#F5F3EF;--surface:#fff;--surface2:#ECEAE5;
+  --text:#1a1a1a;--t2:#767676;--t3:#aaa;
+  --border:rgba(0,0,0,0.1);--border2:rgba(0,0,0,0.07);
+  --r:12px;--rsm:8px;
+  --mono:ui-monospace,'SF Mono','Cascadia Code',monospace;
+  --green-bg:#EAF5EC;--green-t:#1a6b2a;
+  --red-bg:#FDEAEA;--red-t:#b91c1c;
+  --blue-bg:#EAF0FB;--blue-t:#1a4db8;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:max(24px,env(safe-area-inset-bottom));-webkit-tap-highlight-color:transparent}
+#root{max-width:480px;margin:0 auto;padding:0 16px}
+button{font-family:inherit;font-size:14px;background:var(--surface);border:0.5px solid var(--border);border-radius:var(--rsm);cursor:pointer;color:var(--text);transition:opacity .15s}
+button:active{opacity:.7}
+button:disabled{opacity:.4;cursor:not-allowed}
+input,textarea{font-family:inherit;font-size:14px;background:var(--surface);border:0.5px solid var(--border);border-radius:var(--rsm);color:var(--text);outline:none;width:100%;padding:9px 11px}
+input:focus,textarea:focus{border-color:rgba(0,0,0,.25)}
+textarea{resize:none}
+.card{background:var(--surface);border:0.5px solid var(--border2);border-radius:var(--r);padding:12px 14px;margin-bottom:8px}
+.sl{font-size:11px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--t3);margin-bottom:8px}
+.mono{font-family:var(--mono)}
+.row{display:flex;align-items:center;gap:10px}
+.rsb{display:flex;align-items:center;justify-content:space-between}
+.tsm{font-size:12px;color:var(--t2)}
+.ib{background:none;border:none;cursor:pointer;color:var(--t3);padding:4px;display:flex;align-items:center;flex-shrink:0;border-radius:6px;font-size:16px}
+.btnpri{background:var(--text);color:#fff;border-color:var(--text);padding:11px;display:flex;align-items:center;justify-content:center;gap:8px;font-weight:500;border-radius:var(--r);cursor:pointer;font-size:14px}
+.g2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.toast{border-radius:var(--rsm);padding:10px 14px;font-size:14px;margin-bottom:12px}
+.tok{background:var(--green-bg);color:var(--green-t);border:0.5px solid rgba(0,100,0,.15)}
+.terr{background:var(--red-bg);color:var(--red-t);border:0.5px solid rgba(150,0,0,.15)}
+.tinfo{background:var(--blue-bg);color:var(--blue-t);border:0.5px solid rgba(0,0,150,.15)}
+.panel{background:var(--surface2);border:0.5px solid var(--border2);border-radius:var(--r);padding:14px;margin-bottom:16px}
+.panelh{font-size:13px;font-weight:500;margin-bottom:12px}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.pill{padding:6px 10px;display:flex;align-items:center;gap:4px;font-size:12px;border-radius:var(--rsm)}
+.thumb{width:48px;height:48px;object-fit:cover;border-radius:var(--rsm);border:0.5px solid var(--border);cursor:pointer;flex-shrink:0}
+.imgfull{width:100%;border-radius:var(--rsm);margin-top:10px;cursor:pointer;display:block}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spin{display:inline-block;animation:spin .7s linear infinite}
+.setup{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 20px;text-align:center}
+.setup h1{font-size:22px;font-weight:600;margin-bottom:8px}
+.setup p{color:var(--t2);font-size:14px;margin-bottom:20px;line-height:1.5}
+.divider{border:none;border-top:0.5px solid var(--border2);margin:12px 0}
+</style>
+</head>
+<body>
+<div id="root"><div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#aaa;font-size:14px">Lädt…</div></div>
+
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<script type="text/babel">
+const {useState,useEffect,useRef}=React;
+const VERGUTUNG=0.75,TAGES=30;
+const MONTHS=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+const todayStr=()=>new Date().toISOString().split('T')[0];
+const getMonthStr=()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`};
+const getML=s=>{const[y,m]=s.split('-');return`${MONTHS[parseInt(m)-1]} ${y}`};
+const fmtD=s=>{if(!s)return'';const[y,m,d]=s.split('-');return`${d}.${m}.${y}`};
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2);
+const loadM=m=>{try{const d=JSON.parse(localStorage.getItem(`spesen:${m}`)||'null');return d||{entries:[],ausgaben:[],tages:0}}catch{return{entries:[],ausgaben:[],tages:0}}};
+const saveM=(m,e,a,t)=>localStorage.setItem(`spesen:${m}`,JSON.stringify({entries:e,ausgaben:a,tages:t}));
+const compress=(file,mw=900,q=0.7)=>new Promise(res=>{
+  const rd=new FileReader();
+  rd.onload=e=>{const img=new Image();img.onload=()=>{const c=document.createElement('canvas');const r=Math.min(1,mw/Math.max(img.width,img.height));c.width=img.width*r;c.height=img.height*r;c.getContext('2d').drawImage(img,0,0,c.width,c.height);res(c.toDataURL('image/jpeg',q).split(',')[1])};img.src=e.target.result};
+  rd.readAsDataURL(file);
+});
+
+function SetupScreen({onSave}){
+  const[k,setK]=useState('');
+  return(
+    <div className="setup">
+      <div style={{fontSize:48,marginBottom:16}}>💼</div>
+      <h1>Spesen AMP</h1>
+      <p>Gib einmalig deinen Anthropic API-Key ein.<br/>Er wird nur lokal auf diesem Gerät gespeichert.</p>
+      <input type="password" placeholder="sk-ant-api03-..." value={k} onChange={e=>setK(e.target.value)}
+        onKeyDown={e=>{if(e.key==='Enter'&&k.startsWith('sk-'))onSave(k)}}
+        style={{marginBottom:12,maxWidth:340}}/>
+      <button onClick={()=>onSave(k)} disabled={!k.startsWith('sk-')} className="btnpri" style={{maxWidth:280}}>
+        Speichern & Starten
+      </button>
+      <p style={{marginTop:20,fontSize:12,color:'#bbb',lineHeight:1.6}}>
+        API-Key erstellen: console.anthropic.com → API Keys<br/>
+        Kosten: ~0.01 CHF pro Eintrag
+      </p>
+    </div>
+  );
+}
+
+function Settings({apiKey,onSave,onClose}){
+  const ref=useRef(null);
+  return(
+    <div className="setup">
+      <h1 style={{marginBottom:20}}>Einstellungen</h1>
+      <p>API-Key aktualisieren</p>
+      <input type="password" placeholder="sk-ant-..." defaultValue={apiKey} ref={ref} style={{marginBottom:12,maxWidth:340}}/>
+      <button className="btnpri" style={{maxWidth:280,marginBottom:12}} onClick={()=>onSave(ref.current.value)}>Speichern</button>
+      <button onClick={onClose} style={{background:'none',border:'none',color:'#888',fontSize:14,cursor:'pointer'}}>Abbrechen</button>
+    </div>
+  );
+}
+
+function App(){
+  const[apiKey,setApiKey]=useState(()=>localStorage.getItem('amp_api_key')||'');
+  const[month,setMonth]=useState(getMonthStr);
+  const[entries,setEntries]=useState([]);
+  const[ausgaben,setAusgaben]=useState([]);
+  const[tages,setTages]=useState(0);
+  const[input,setInput]=useState('');
+  const[loading,setLoading]=useState(false);
+  const[showRoute,setShowRoute]=useState(false);
+  const[rFrom,setRFrom]=useState('');
+  const[rTo,setRTo]=useState('');
+  const[rFirma,setRFirma]=useState('');
+  const[rDesc,setRDesc]=useState('');
+  const[rKm,setRKm]=useState(null);
+  const[rRound,setRRound]=useState(false);
+  const[rLoad,setRLoad]=useState(false);
+  const[scanLoad,setScanLoad]=useState(false);
+  const[pending,setPending]=useState(null);
+  const[expId,setExpId]=useState(null);
+  const[toast,setToast]=useState(null);
+  const[showSettings,setShowSettings]=useState(false);
+  const toastT=useRef(null);
+  const fileRef=useRef(null);
+  const taRef=useRef(null);
+
+  useEffect(()=>{
+    const d=loadM(month);
+    setEntries(d.entries);setAusgaben(d.ausgaben);setTages(d.tages);
+  },[month]);
+
+  const save=(e,a,t)=>saveM(month,e,a,t);
+
+  const showToast=(msg,type='ok')=>{
+    setToast({msg,type});clearTimeout(toastT.current);
+    toastT.current=setTimeout(()=>setToast(null),4000);
+  };
+
+  const apiCall=async(body)=>{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key':apiKey,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body:JSON.stringify(body)
+    });
+    const data=await res.json();
+    if(data.error)throw new Error(data.error.message);
+    return data;
+  };
+
+  const handleSend=async()=>{
+    if(!input.trim()||loading)return;
+    const text=input.trim();setInput('');
+    if(taRef.current)taRef.current.style.height='auto';
+    setLoading(true);
+    try{
+      const data=await apiCall({
+        model:'claude-sonnet-4-20250514',max_tokens:800,
+        system:`Spesenlogger AMP Sport Aussendienst Michele Lepori, Schweiz. Heute: ${todayStr()}.
+Nur JSON, kein Markdown: {"entries":[{"datum":"YYYY-MM-DD","firma":"Kunde","beschreibung":"Produkt","km":0}],"ausgaben":[{"datum":"YYYY-MM-DD","beschreibung":"Was","betrag":0.0}],"tages":0,"feedback":"Bestätigung DE"}
+heute=${todayStr()}, gestern=gestern. tages=ZUSÄTZLICHE Anzahl Tagesspesen.`,
+        messages:[{role:'user',content:text}]
+      });
+      const raw=data.content?.find(b=>b.type==='text')?.text||'{}';
+      const p=JSON.parse(raw.replace(/```[\w]*|```/g,'').trim());
+      const newE=[...entries,...(p.entries||[]).map(e=>({...e,id:uid()}))];
+      const newA=[...ausgaben,...(p.ausgaben||[]).map(a=>({...a,id:uid()}))];
+      const newT=tages+(p.tages||0);
+      setEntries(newE);setAusgaben(newA);setTages(newT);save(newE,newA,newT);
+      showToast(p.feedback||'✓ Gespeichert');
+    }catch(e){showToast('Fehler: '+e.message,'err');}
+    setLoading(false);
+  };
+
+  const calcRoute=async()=>{
+    if(!rFrom||!rTo)return;
+    setRLoad(true);setRKm(null);
+    try{
+      const fG=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(rFrom+', Schweiz')}&format=json&limit=1`).then(r=>r.json());
+      await new Promise(r=>setTimeout(r,1100));
+      const tG=await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(rTo+', Schweiz')}&format=json&limit=1`).then(r=>r.json());
+      if(!fG[0]||!tG[0])throw new Error('Adresse nicht gefunden');
+      const rt=await fetch(`https://router.project-osrm.org/route/v1/driving/${fG[0].lon},${fG[0].lat};${tG[0].lon},${tG[0].lat}?overview=false`).then(r=>r.json());
+      if(!rt.routes?.length)throw new Error('Keine Route gefunden');
+      setRKm(Math.ceil(rt.routes[0].distance/1000));
+    }catch(e){showToast('Route: '+e.message,'err');}
+    setRLoad(false);
+  };
+
+  const createRouteEntry=()=>{
+    if(!rKm)return;
+    const km=rRound?rKm*2:rKm;
+    const newE=[...entries,{id:uid(),datum:todayStr(),firma:rFirma||rTo,beschreibung:rDesc||'Besuch',km}];
+    setEntries(newE);save(newE,ausgaben,tages);
+    showToast(`✓ ${km} km eingetragen`);
+    setShowRoute(false);setRFrom('');setRTo('');setRFirma('');setRDesc('');setRKm(null);setRRound(false);
+  };
+
+  const handleFile=async(e)=>{
+    const file=e.target.files?.[0];if(!file)return;e.target.value='';
+    setScanLoad(true);
+    try{
+      const b64=await compress(file);
+      const data=await apiCall({
+        model:'claude-sonnet-4-20250514',max_tokens:400,
+        system:`Extrahiere Rechnungsdaten. Nur JSON: {"datum":"YYYY-MM-DD","beschreibung":"Firma + Artikel","betrag":0.0,"feedback":"Kurz DE"}
+Heute=${todayStr()}. betrag in CHF als Zahl.`,
+        messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:'image/jpeg',data:b64}},{type:'text',text:'Rechnungsdaten extrahieren.'}]}]
+      });
+      const raw=data.content?.find(b=>b.type==='text')?.text||'{}';
+      const p=JSON.parse(raw.replace(/```[\w]*|```/g,'').trim());
+      setPending({...p,base64:b64});
+    }catch(e){showToast('Scan fehlgeschlagen: '+e.message,'err');}
+    setScanLoad(false);
+  };
+
+  const confirmReceipt=()=>{
+    if(!pending)return;
+    const newA=[...ausgaben,{id:uid(),datum:pending.datum||todayStr(),beschreibung:pending.beschreibung||'Ausgabe',betrag:Number(pending.betrag)||0,receipt:pending.base64}];
+    setAusgaben(newA);save(entries,newA,tages);
+    showToast(pending.feedback||'✓ Quittung gespeichert');setPending(null);
+  };
+
+  const rmEntry=id=>{const n=entries.filter(e=>e.id!==id);setEntries(n);save(n,ausgaben,tages)};
+  const rmAusgabe=id=>{const n=ausgaben.filter(a=>a.id!==id);setAusgaben(n);save(entries,n,tages)};
+  const adjTages=d=>{const n=Math.max(0,tages+d);setTages(n);save(entries,ausgaben,n)};
+  const changeMonth=d=>{const[y,m]=month.split('-').map(Number);const nd=new Date(y,m-1+d,1);setMonth(`${nd.getFullYear()}-${String(nd.getMonth()+1).padStart(2,'0')}`)};
+
+  const saveApiKey=k=>{localStorage.setItem('amp_api_key',k);setApiKey(k);setShowSettings(false)};
+
+  const totalKm=entries.reduce((s,e)=>s+(Number(e.km)||0),0);
+  const kmChf=+(totalKm*VERGUTUNG).toFixed(2);
+  const ausgChf=+ausgaben.reduce((s,a)=>s+(Number(a.betrag)||0),0).toFixed(2);
+  const tChf=tages*TAGES;
+  const total=+(kmChf+ausgChf+tChf).toFixed(2);
+  const hasRec=ausgaben.some(a=>a.receipt);
+
+  const exportXlsx=()=>{
+    const rows=[
+      ['SPESENABRECHNUNG'],['AMP Sport GmbH'],['Poststrasse 6, 6302 Zug'],['Name','Michele Lepori'],[],
+      ['E-mail','michele@ampsport.ch','','Vergütung:',0.75],[],['Datum',getML(month)],
+      ['DATUM','FIRMA','BESCHREIBUNG','ANZAHL KM','TOTAL CHF'],
+      ...entries.map(e=>[fmtD(e.datum),e.firma,e.beschreibung,Number(e.km)||0,+((Number(e.km)||0)*VERGUTUNG).toFixed(2)]),
+      ...ausgaben.map(a=>[fmtD(a.datum),'',a.beschreibung,0,Number(a.betrag)||0]),
+      ['','',`${tages} x Tagesspesen`,'',tChf],
+      ['SUMME','','',totalKm,total]
+    ];
+    const ws=XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols']=[{wch:12},{wch:22},{wch:26},{wch:12},{wch:12}];
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'Spesenabrechnung AMP');
+    XLSX.writeFile(wb,`Spesenformular_${month}.xlsx`);
+  };
+
+  const dlBelege=()=>ausgaben.filter(a=>a.receipt).forEach(a=>{
+    const l=document.createElement('a');
+    l.href=`data:image/jpeg;base64,${a.receipt}`;
+    l.download=`Beleg_${fmtD(a.datum)}_${(a.beschreibung||'').slice(0,20).replace(/[^\w]/g,'_')}.jpg`;
+    l.click();
+  });
+
+  if(!apiKey)return <SetupScreen onSave={saveApiKey}/>;
+  if(showSettings)return <Settings apiKey={apiKey} onSave={saveApiKey} onClose={()=>setShowSettings(false)}/>;
+
+  return(
+    <div style={{paddingTop:16}}>
+      <input type="file" accept="image/*" capture="environment" ref={fileRef} style={{display:'none'}} onChange={handleFile}/>
+
+      {/* Header */}
+      <div className="rsb" style={{marginBottom:12}}>
+        <button className="ib" onClick={()=>changeMonth(-1)} aria-label="Vorheriger Monat" style={{fontSize:22}}>‹</button>
+        <span style={{fontSize:15,fontWeight:600}}>{getML(month)}</span>
+        <div className="row" style={{gap:4}}>
+          <button className="ib" onClick={()=>changeMonth(1)} aria-label="Nächster Monat" style={{fontSize:22}}>›</button>
+          <button className="ib" onClick={()=>setShowSettings(true)} title="Einstellungen" style={{fontSize:17}}>⚙</button>
+        </div>
+      </div>
+
+      {/* Summary */}
+      <div className="g2" style={{marginBottom:16}}>
+        <div style={{background:'#fff',borderRadius:12,padding:'12px 14px',border:'0.5px solid var(--border2)'}}>
+          <div className="tsm" style={{marginBottom:4}}>{entries.length} Termine · {totalKm} km</div>
+          <div className="mono" style={{fontSize:18,fontWeight:500}}>CHF {kmChf.toFixed(2)}</div>
+        </div>
+        <div style={{background:'#fff',borderRadius:12,padding:'12px 14px',border:'0.5px solid var(--border2)'}}>
+          <div className="tsm" style={{marginBottom:4}}>Total {getML(month).split(' ')[0]}</div>
+          <div className="mono" style={{fontSize:18,fontWeight:500}}>CHF {total.toFixed(2)}</div>
+        </div>
+      </div>
+
+      {/* Input */}
+      <div className="card" style={{marginBottom:16}}>
+        <textarea ref={taRef} value={input} rows={2} disabled={loading}
+          placeholder={'z.B. «heute OSP Dietikon Bluetens 45km» oder «gestern Tagesspesen»'}
+          onChange={e=>{setInput(e.target.value);e.target.style.height='auto';e.target.style.height=Math.min(e.target.scrollHeight,120)+'px'}}
+          onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();handleSend()}}}
+          style={{border:'none',padding:0,minHeight:52,fontSize:14,lineHeight:1.5,background:'transparent'}}
+        />
+        <div className="rsb" style={{marginTop:8}}>
+          <div className="row" style={{gap:6}}>
+            <button className="pill" onClick={()=>setShowRoute(!showRoute)}
+              style={{background:showRoute?'#1a1a1a':'transparent',color:showRoute?'#fff':'var(--t2)',borderColor:showRoute?'#1a1a1a':'var(--border)'}}>
+              📍 Route
+            </button>
+            <button className="pill" onClick={()=>fileRef.current?.click()} disabled={scanLoad}
+              style={{color:'var(--t2)'}}>
+              {scanLoad?<span className="spin" style={{marginRight:4}}>↻</span>:'📷 '}
+              {scanLoad?'Scanne…':'Scan'}
+            </button>
+          </div>
+          <button onClick={handleSend} disabled={loading}
+            style={{background:'#1a1a1a',color:'#fff',border:'none',padding:'9px 20px',borderRadius:8,fontSize:14,fontWeight:500,cursor:loading?'wait':'pointer',opacity:loading?.7:1}}>
+            {loading?<span className="spin">↻</span>:'↑'}
+          </button>
+        </div>
+      </div>
+
+      {/* Route panel */}
+      {showRoute&&(
+        <div className="panel">
+          <div className="panelh">📍 Route berechnen</div>
+          <input placeholder="Von (z.B. Basel Hauptbahnhof)" value={rFrom} onChange={e=>setRFrom(e.target.value)} onKeyDown={e=>e.key==='Enter'&&calcRoute()} style={{marginBottom:8}}/>
+          <input placeholder="Nach (z.B. OSP Dietikon)" value={rTo} onChange={e=>setRTo(e.target.value)} onKeyDown={e=>e.key==='Enter'&&calcRoute()} style={{marginBottom:8}}/>
+          <div className="fg">
+            <input placeholder="Firma / Kunde" value={rFirma} onChange={e=>setRFirma(e.target.value)}/>
+            <input placeholder="Produkt" value={rDesc} onChange={e=>setRDesc(e.target.value)}/>
+          </div>
+          <div className="rsb" style={{marginBottom:12}}>
+            <label className="row" style={{gap:6,fontSize:13,cursor:'pointer',color:'var(--t2)'}}>
+              <input type="checkbox" checked={rRound} onChange={e=>setRRound(e.target.checked)} style={{cursor:'pointer',width:'auto'}}/>
+              Hin- und Rückfahrt
+            </label>
+            {rKm&&<span className="mono" style={{fontSize:14,fontWeight:500}}>
+              {rRound?rKm*2:rKm} km {rRound&&<span style={{fontSize:12,color:'var(--t2)'}}>(2×{rKm})</span>}
+            </span>}
+          </div>
+          <div className="g2">
+            <button onClick={calcRoute} disabled={rLoad||!rFrom||!rTo} style={{padding:'9px',fontSize:13,borderRadius:8}}>
+              {rLoad?<span className="spin">↻</span>:'🗺'} {rLoad?'Berechne…':'Berechnen'}
+            </button>
+            <button onClick={createRouteEntry} disabled={!rKm}
+              style={{padding:'9px',fontSize:13,borderRadius:8,background:rKm?'#1a1a1a':'',color:rKm?'#fff':'',borderColor:rKm?'#1a1a1a':''}}>
+              Eintrag erstellen →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Pending receipt */}
+      {pending&&(
+        <div className="panel" style={{borderColor:'#a0c4f8',marginBottom:16}}>
+          <div className="panelh" style={{color:'var(--blue-t)'}}>🧾 Quittung erkannt</div>
+          <div className="row" style={{marginBottom:12,alignItems:'flex-start',gap:12}}>
+            {pending.base64&&<img src={`data:image/jpeg;base64,${pending.base64}`} style={{width:72,height:72,objectFit:'cover',borderRadius:8,flexShrink:0,border:'0.5px solid var(--border)'}} alt="Quittung"/>}
+            <div style={{flex:1}}>
+              <input value={pending.beschreibung||''} onChange={e=>setPending({...pending,beschreibung:e.target.value})} placeholder="Beschreibung" style={{marginBottom:6}}/>
+              <div className="fg" style={{marginBottom:0}}>
+                <input value={pending.datum||''} onChange={e=>setPending({...pending,datum:e.target.value})} placeholder="Datum (JJJJ-MM-TT)"/>
+                <input value={pending.betrag||''} onChange={e=>setPending({...pending,betrag:e.target.value})} placeholder="CHF Betrag"/>
+              </div>
+            </div>
+          </div>
+          <div className="g2">
+            <button onClick={confirmReceipt} style={{padding:'9px',fontSize:13,borderRadius:8,background:'#1a1a1a',color:'#fff',border:'none',cursor:'pointer'}}>✓ Übernehmen</button>
+            <button onClick={()=>setPending(null)} style={{padding:'9px',fontSize:13,borderRadius:8,cursor:'pointer',color:'var(--t2)'}}>Abbrechen</button>
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast&&<div className={`toast ${toast.type==='err'?'terr':'tok'}`}>{toast.msg}</div>}
+
+      {/* Entries */}
+      {entries.length>0&&(
+        <div style={{marginBottom:16}}>
+          <div className="sl">Termine & KM</div>
+          {entries.map(e=>(
+            <div key={e.id} className="card row">
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:14,fontWeight:500,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{e.firma}</div>
+                <div className="tsm" style={{marginTop:2}}>{fmtD(e.datum)} · {e.beschreibung}</div>
+              </div>
+              <div style={{textAlign:'right',flexShrink:0}}>
+                <div className="mono" style={{fontSize:13}}>{e.km} km</div>
+                <div className="mono tsm" style={{marginTop:1}}>CHF {((Number(e.km)||0)*VERGUTUNG).toFixed(2)}</div>
+              </div>
+              <button className="ib" onClick={()=>rmEntry(e.id)} aria-label="Löschen">✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Ausgaben */}
+      {ausgaben.length>0&&(
+        <div style={{marginBottom:16}}>
+          <div className="sl">Ausgaben & Belege</div>
+          {ausgaben.map(a=>(
+            <div key={a.id} className="card" style={{flexDirection:'column'}}>
+              <div className="row">
+                {a.receipt
+                  ?<img src={`data:image/jpeg;base64,${a.receipt}`} className="thumb" onClick={()=>setExpId(expId===a.id?null:a.id)} alt="Beleg"/>
+                  :<div style={{width:4,height:36,background:'var(--border)',borderRadius:2,flexShrink:0}}/>
+                }
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:14,fontWeight:500}}>{a.beschreibung}</div>
+                  <div className="tsm" style={{marginTop:2}}>{fmtD(a.datum)}{a.receipt&&<span style={{color:'var(--t3)'}}> · Beleg ✓</span>}</div>
+                </div>
+                <div className="mono" style={{fontSize:13,flexShrink:0}}>CHF {(Number(a.betrag)||0).toFixed(2)}</div>
+                <button className="ib" onClick={()=>rmAusgabe(a.id)} aria-label="Löschen">✕</button>
+              </div>
+              {expId===a.id&&a.receipt&&(
+                <img src={`data:image/jpeg;base64,${a.receipt}`} className="imgfull" onClick={()=>setExpId(null)} alt="Beleg gross"/>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Tagesspesen */}
+      <div style={{marginBottom:16}}>
+        <div className="sl">Tagesspesen</div>
+        <div className="card row">
+          <div style={{flex:1}}>
+            <div style={{fontSize:14,fontWeight:500}}>Tagesspesen à CHF {TAGES}</div>
+          </div>
+          <div className="row" style={{gap:12}}>
+            <button onClick={()=>adjTages(-1)} style={{width:32,height:32,borderRadius:8,fontSize:20,display:'flex',alignItems:'center',justifyContent:'center'}}>−</button>
+            <span className="mono" style={{fontSize:18,fontWeight:500,minWidth:20,textAlign:'center'}}>{tages}</span>
+            <button onClick={()=>adjTages(1)} style={{width:32,height:32,borderRadius:8,fontSize:20,display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
+          </div>
+          <div className="mono" style={{fontSize:13,minWidth:72,textAlign:'right',flexShrink:0}}>CHF {tChf.toFixed(2)}</div>
+        </div>
+      </div>
+
+      {/* Total */}
+      {(entries.length>0||ausgaben.length>0||tages>0)&&(
+        <div className="card" style={{marginBottom:12}}>
+          <div className="rsb" style={{marginBottom:6,fontSize:13,color:'var(--t2)'}}>
+            <span>KM-Entschädigung ({totalKm} km × 0.75)</span>
+            <span className="mono">CHF {kmChf.toFixed(2)}</span>
+          </div>
+          {ausgChf>0&&<div className="rsb" style={{marginBottom:6,fontSize:13,color:'var(--t2)'}}>
+            <span>Ausgaben</span><span className="mono">CHF {ausgChf.toFixed(2)}</span>
+          </div>}
+          <div className="rsb" style={{marginBottom:12,paddingBottom:12,borderBottom:'0.5px solid var(--border)',fontSize:13,color:'var(--t2)'}}>
+            <span>Tagesspesen ({tages}×)</span><span className="mono">CHF {tChf.toFixed(2)}</span>
+          </div>
+          <div className="rsb" style={{fontSize:15,fontWeight:600}}>
+            <span>Total</span><span className="mono">CHF {total.toFixed(2)}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Export */}
+      <div className={hasRec?'g2':''} style={{gap:8}}>
+        <button onClick={exportXlsx} className="btnpri">📊 Excel exportieren</button>
+        {hasRec&&<button onClick={dlBelege} className="btnpri">🖼 Belege laden</button>}
+      </div>
+
+      <div style={{height:16}}/>
+    </div>
+  );
+}
+
+// PWA manifest as blob
+const manifest={name:'Spesen AMP',short_name:'Spesen',start_url:'.',display:'standalone',background_color:'#F5F3EF',theme_color:'#1a1a1a'};
+const mb=new Blob([JSON.stringify(manifest)],{type:'application/json'});
+const ml=document.createElement('link');ml.rel='manifest';ml.href=URL.createObjectURL(mb);document.head.appendChild(ml);
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
